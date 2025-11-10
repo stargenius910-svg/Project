@@ -1,10 +1,9 @@
 name: Build Ultroid Deployer APK
 
 on:
-  workflow_dispatch:
   push:
-    branches:
-      - main
+    branches: [ "main" ]
+  workflow_dispatch:
 
 jobs:
   build:
@@ -14,33 +13,33 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install dependencies
-        run: sudo apt-get update && sudo apt-get install -y unzip rsync
-
-      - name: Extract Ultroid-Deployer-Final.zip
-        run: |
-          if [ -f Ultroid-Deployer-Final.zip ]; then
-            echo "Extracting Ultroid-Deployer-Final.zip..."
-            unzip -o Ultroid-Deployer-Final.zip -d extracted/
-            rsync -av extracted/ ./
-          else
-            echo "❌ Ultroid-Deployer-Final.zip not found in repo root!"
-            exit 1
-          fi
+      - name: Extract Ultroid Deployer Zip
+        run: unzip Ultroid-Deployer-Final.zip -d app
 
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: "3.24.0"
+          flutter-version: '3.24.0'
 
-      - name: Install Flutter dependencies
-        run: flutter pub get
+      - name: Create Flutter project if missing
+        run: |
+          if [ ! -f app/pubspec.yaml ]; then
+            flutter create app
+          fi
+
+      - name: Copy project files into Flutter app
+        run: |
+          cp -r app/* app/
+          cd app
+          flutter pub get
 
       - name: Build release APK
-        run: flutter build apk --release
+        run: |
+          cd app
+          flutter build apk --release
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: Ultroid-Deployer-APK
-          path: build/app/outputs/flutter-apk/app-release.apk
+          path: app/build/app/outputs/flutter-apk/app-release.apk
