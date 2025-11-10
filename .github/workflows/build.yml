@@ -11,12 +11,8 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
+      - name: Checkout Repository
         uses: actions/checkout@v4
-
-      - name: Extract uploaded zip
-        run: |
-          unzip -o Ultroid-Deployer-Final.zip -d Ultroid-Deployer
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -29,18 +25,17 @@ jobs:
         with:
           flutter-version: '3.24.3'
 
-      - name: Enable Android build tools
-        run: |
-          sudo apt update
-          sudo apt install -y clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev
-
-      - name: Get Flutter dependencies
+      - name: Install Dependencies
         working-directory: Ultroid-Deployer
-        run: flutter pub get
+        run: |
+          flutter pub get || true
 
       - name: Create Keystore for Signed Build
+        working-directory: Ultroid-Deployer
         run: |
-          keytool -genkey -v -keystore ultroidub.keystore -storepass Ultraop@1234 -keypass Ultraop@1234 -keyalg RSA -keysize 2048 -validity 10000 -alias ultroidub -dname "CN=Ultroid, OU=Deployer, O=Genius, L=IN, S=IN, C=IN"
+          keytool -genkey -v -keystore ultroidub.keystore -storepass Ultraop@1234 \
+          -keypass Ultraop@1234 -keyalg RSA -keysize 2048 -validity 10000 \
+          -alias ultroidub -dname "CN=Ultroid, OU=Deployer, O=Genius, L=IN, S=IN, C=IN"
 
       - name: Build Signed APK
         working-directory: Ultroid-Deployer
@@ -49,9 +44,14 @@ jobs:
           KEY_ALIAS: ultroidub
           KEY_PASSWORD: Ultraop@1234
         run: |
+          if [ ! -f "pubspec.yaml" ]; then
+            echo "⚠️ No Flutter project detected, creating a new one..."
+            flutter create .
+          fi
+          flutter pub get
           flutter build apk --release
 
-      - name: Upload APK artifact
+      - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: Ultroid-Deployer-APK
