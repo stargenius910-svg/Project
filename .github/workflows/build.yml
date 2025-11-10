@@ -1,10 +1,10 @@
 name: Build Ultroid APK from ZIP
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - main
-  workflow_dispatch:
 
 jobs:
   build:
@@ -40,16 +40,19 @@ jobs:
       - name: Restore Project Files
         run: |
           echo "🔄 Restoring project files..."
-          cp -r extracted/assets extracted/lib extracted/scripts .
+          cp -r extracted/lib extracted/assets extracted/scripts extracted/requirements.txt .
           cp extracted/pubspec.yaml .
-          cp extracted/requirements.txt .
           echo "✅ Project files restored"
 
       - name: Get Dependencies
         run: flutter pub get
 
       - name: Build APK (Release)
-        run: flutter build apk --release
+        working-directory: extracted/android
+        run: |
+          echo "🚀 Building APK inside android directory..."
+          cd ..
+          flutter build apk --release
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
