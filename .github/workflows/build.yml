@@ -45,17 +45,17 @@ jobs:
           echo "✅ Project files restored"
 
       - name: Get Dependencies
+        working-directory: extracted
         run: flutter pub get
 
       - name: Build APK (Release)
-        working-directory: extracted/android
+        working-directory: extracted
         run: |
-          echo "🚀 Building APK inside android directory..."
-          cd ..
+          echo "🚀 Building release APK..."
           flutter build apk --release
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: Ultroid-Deployer-Release
-          path: build/app/outputs/flutter-apk/app-release.apk
+          path: extracted/build/app/outputs/flutter-apk/app-release.apk
