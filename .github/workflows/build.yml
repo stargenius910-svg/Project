@@ -18,56 +18,50 @@ jobs:
       with:
         flutter-version: '3.19.5'
 
-    # 3️⃣ Install JDK (required for Gradle)
+    # 3️⃣ Setup JDK
     - name: Set up JDK 17
       uses: actions/setup-java@v4
       with:
         distribution: 'temurin'
         java-version: '17'
 
-    # 4️⃣ Extract ZIP (if you uploaded source.zip)
+    # 4️⃣ Extract ZIP
     - name: Extract Source ZIP
       run: |
-        mkdir Project
-        unzip -o source.zip -d Project || true
-        cd Project
+        mkdir ultroid_app
+        unzip -o source.zip -d ultroid_app || true
 
-    # 5️⃣ Move inside project folder if needed
+    # 5️⃣ Move to project folder
     - name: Move to Project Folder
-      run: |
-        cd Project || true
-        echo "Inside Project Folder"
+      run: cd ultroid_app
 
-    # 6️⃣ Get Flutter dependencies
+    # 6️⃣ Install dependencies
     - name: Install Dependencies
-      run: |
-        flutter pub get || true
+      working-directory: ultroid_app
+      run: flutter pub get || true
 
-    # 7️⃣ Create missing android/ios Gradle project structure
+    # 7️⃣ Prepare flutter structure
     - name: Prepare Flutter Project
+      working-directory: ultroid_app
       run: flutter create .
 
-    # 8️⃣ Create Keystore for signed APK
+    # 8️⃣ Create keystore
     - name: Create Keystore for Signed Build
+      working-directory: ultroid_app
       run: |
         keytool -genkey -v -keystore ultroidub.keystore -storepass Ultra@pwd1234 \
         -keyalg RSA -keysize 2048 -validity 10000 \
         -alias ultroidub -keypass Ultra@pwd1234 \
         -dname "CN=Ultroid, OU=Deployer, O=Genius, L=IN, S=TN, C=IN"
 
-    # 9️⃣ Build the APK (release)
+    # 9️⃣ Build release APK
     - name: Build Signed APK
-      run: |
-        flutter build apk --release
+      working-directory: ultroid_app
+      run: flutter build apk --release
 
-    # 🔟 Upload built APK as artifact
+    # 🔟 Upload artifact
     - name: Upload APK Artifact
       uses: actions/upload-artifact@v4
       with:
         name: Ultroid-Release-APK
-        path: build/app/outputs/flutter-apk/app-release.apk
-
-    # 🔸 Cleanup
-    - name: Post Build Cleanup
-      run: |
-        echo "Build Completed Successfully 🚀"
+        path: ultroid_app/build/app/outputs/flutter-apk/app-release.apk
