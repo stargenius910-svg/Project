@@ -12,14 +12,14 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Extract uploaded zip
         run: |
           unzip -o Ultroid-Deployer-Final.zip -d Ultroid-Deployer
 
       - name: Set up JDK 17
-        uses: actions/setup-java@v3
+        uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
@@ -52,7 +52,7 @@ jobs:
           flutter build apk --release
 
       - name: Upload APK artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: Ultroid-Deployer-APK
           path: Ultroid-Deployer/build/app/outputs/flutter-apk/app-release.apk
