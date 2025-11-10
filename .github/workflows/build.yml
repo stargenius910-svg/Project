@@ -1,6 +1,9 @@
-name: Build Ultroid Deployer From ZIP
+name: Build Ultroid APK from ZIP
 
 on:
+  push:
+    branches:
+      - main
   workflow_dispatch:
 
 jobs:
@@ -8,53 +11,39 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout Repository
-      uses: actions/checkout@v4
+      - name: Checkout Repository
+        uses: actions/checkout@v4
 
-    - name: Install unzip tool
-      run: sudo apt-get update && sudo apt-get install -y unzip
+      - name: Install unzip tool
+        run: sudo apt-get update && sudo apt-get install -y unzip
 
-    - name: Extract Project ZIP
-      run: |
-        mkdir -p extracted
-        if [ -f Ultroid-Deployer-Final.zip ]; then
-          unzip -o Ultroid-Deployer-Final.zip -d extracted
-          echo "ZIP extracted."
-        else
-          echo "❌ No ZIP found at repo root."
-          exit 1
-        fi
+      - name: Extract Project ZIP
+        run: |
+          mkdir -p extracted
+          unzip -o "Ultroid-Deployer-Final.zip" -d extracted
+          echo "✅ ZIP extracted successfully"
+          echo "Detected files:"
+          ls extracted
 
-        echo "Folders inside extracted/:"
-        ls extracted
-        # Detect folder with pubspec.yaml
-        FOUND=$(find extracted -type f -name "pubspec.yaml" | head -n 1 || true)
-        if [ -z "$FOUND" ]; then
-          echo "❌ No pubspec.yaml found inside ZIP."
-          exit 1
-        fi
-        WORKDIR=$(dirname "$FOUND")
-        echo "Detected Flutter project directory: $WORKDIR"
-        echo "WORKDIR=$WORKDIR" >> $GITHUB_ENV
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.22.3'   # ✅ fixed version to avoid version detection error
+          channel: 'stable'
 
-    - name: Setup Flutter
-      uses: subosito/flutter-action@v2
-      with:
-        flutter-version: 'stable'
+      - name: Get Flutter Version
+        run: flutter --version
 
-    - name: Get Flutter Version
-      run: flutter --version
+      - name: Get Dependencies
+        working-directory: extracted
+        run: flutter pub get
 
-    - name: Get Dependencies
-      run: flutter pub get
-      working-directory: ${{ env.WORKDIR }}
+      - name: Build APK (Release)
+        working-directory: extracted
+        run: flutter build apk --release
 
-    - name: Build APK (Release)
-      run: flutter build apk --release
-      working-directory: ${{ env.WORKDIR }}
-
-    - name: Upload APK Artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: Ultroid-Deployer-APK
-        path: ${{ env.WORKDIR }}/build/app/outputs/flutter-apk/*.apk
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Ultroid-Deployer-Release
+          path: extracted/build/app/outputs/flutter-apk/app-release.apk
