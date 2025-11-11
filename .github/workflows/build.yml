@@ -1,0 +1,70 @@
+name: Ultroid Deployer Build
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Install unzip and dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y unzip python3 python3-pip git
+
+      - name: Extract uploaded ZIP
+        run: |
+          if [ -f Ultroid-Deployer-Final-Complete-v2.zip ]; then
+            unzip -o Ultroid-Deployer-Final-Complete-v2.zip -d project
+          elif [ -f Ultroid-Deployer-Final.zip ]; then
+            unzip -o Ultroid-Deployer-Final.zip -d project
+          else
+            echo "❌ ZIP file not found!"
+            exit 1
+          fi
+          cd project
+          ls -la
+
+      - name: Install Python requirements
+        run: |
+          cd project
+          if [ -f requirements.txt ]; then
+            python3 -m pip install -r requirements.txt
+          fi
+
+      - name: Install Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.24.0'
+
+      - name: Get Flutter Dependencies
+        run: |
+          cd project
+          flutter pub get
+
+      - name: Build Signed Release APK
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          cd project
+          flutter build apk --release
+
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ultroid-deployer-apk
+          path: project/build/app/outputs/flutter-apk/app-release.apk
