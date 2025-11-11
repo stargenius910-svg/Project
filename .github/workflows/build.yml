@@ -1,4 +1,4 @@
-name: Ultroid Deployer Build (V2 Fix)
+name: Ultroid Deployer Build (Final Kotlin+Java Support)
 
 on:
   workflow_dispatch:
@@ -25,15 +25,24 @@ jobs:
           fi
           echo "Found ZIP: $ZIP_FILE"
           unzip -o "$ZIP_FILE" -d project
-          ls project
+          ls project/android/app/src/main || echo "No android main dir?"
 
       - name: Auto-Fix for Flutter Android V2 Embedding
         run: |
-          cd project/android/app/src/main/java || exit 1
-          find . -name "MainActivity.java" -print0 | while IFS= read -r -d '' file; do
+          cd project/android/app/src/main || exit 1
+          TARGET_DIR=""
+          if [ -d "java" ]; then
+            TARGET_DIR="java"
+          elif [ -d "kotlin" ]; then
+            TARGET_DIR="kotlin"
+          else
+            echo "❌ No java or kotlin directory found!"
+            exit 1
+          fi
+          find $TARGET_DIR -name "MainActivity.*" -print0 | while IFS= read -r -d '' file; do
             echo "⚙️ Fixing $file"
             sed -i 's/import io.flutter.app.FlutterActivity;/import io.flutter.embedding.android.FlutterActivity;/g' "$file"
-            sed -i 's/FlutterActivity/FlutterActivity/g' "$file"
+            sed -i 's/extends FlutterActivity/extends FlutterActivity/g' "$file"
           done
           echo "✅ Converted to V2 embedding"
 
