@@ -1,0 +1,65 @@
+name: Build from Uploaded ZIP
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+
+    - name: Find and Extract ZIP
+      run: |
+        ZIP_FILE=$(ls *.zip | head -n 1)
+        echo "Found ZIP: $ZIP_FILE"
+        mkdir extracted
+        unzip -o "$ZIP_FILE" -d extracted
+        ls extracted
+
+    - name: Setup JDK (for Android Build)
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+
+    - name: Setup Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Install Dependencies (Python)
+      run: |
+        cd extracted
+        if [ -f requirements.txt ]; then
+          echo "Installing Python requirements..."
+          pip install -r requirements.txt
+        else
+          echo "No requirements.txt found, skipping."
+        fi
+
+    - name: Build Android APK
+      run: |
+        cd extracted
+        if [ -f gradlew ]; then
+          chmod +x gradlew
+          echo "Running Gradle build..."
+          ./gradlew assembleRelease || ./gradlew assembleDebug
+        else
+          echo "⚠️ No gradlew found. Skipping Android build."
+        fi
+
+    - name: Upload Build Artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: Build-Outputs
+        path: |
+          extracted/**/*.apk
+          extracted/**/*.py
+          extracted/**/*.log
+          extracted/**/*.txt
