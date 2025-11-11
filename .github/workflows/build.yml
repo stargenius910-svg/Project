@@ -8,7 +8,6 @@ on:
 
 permissions:
   contents: read
-  actions: write
 
 jobs:
   build:
@@ -21,23 +20,12 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '17'
-
       - name: Install unzip (apt)
-        run: sudo apt-get update && sudo apt-get install -y unzip zip
-
-      - name: Ensure scripts are executable
-        run: |
-          chmod +x ./scripts/*.sh || true
+        run: sudo apt-get update && sudo apt-get install -y unzip zip rsync
 
       - name: Create workspace dir
         run: mkdir -p extracted
 
-      # --- Extract the zip uploaded to repo root ---
       - name: Find ZIP in repo root
         id: findzip
         run: |
@@ -45,12 +33,11 @@ jobs:
           if [ -f "$ZIP_NAME" ]; then
             echo "zip=$ZIP_NAME" >> $GITHUB_OUTPUT
           else
-            # try to find any zip matching Ultroid-Deployer*.zip
             candidate=$(ls -1 Ultroid-Deployer*.zip 2>/dev/null | head -n1 || true)
             if [ -n "$candidate" ]; then
               echo "zip=$candidate" >> $GITHUB_OUTPUT
             else
-              echo "No zip found in repo root. Please upload Ultroid-Deployer-Final.zip" >&2
+              echo "No Ultroid-Deployer zip found in repo root. Please upload Ultroid-Deployer-Final.zip" >&2
               exit 1
             fi
           fi
@@ -59,65 +46,48 @@ jobs:
         run: |
           echo "Extracting ${{ steps.findzip.outputs.zip }} -> extracted/"
           unzip -o "${{ steps.findzip.outputs.zip }}" -d extracted
-
-      - name: Inspect extracted
-        run: |
-          echo "---- extracted/ listing ----"
+          echo "Contents:"
           ls -la extracted || true
-          echo "----------------------------"
 
-      # --- Setup flutter environment (download) ---
-      - name: Setup Flutter SDK
+      - name: Make extracted scripts executable (if any)
+        run: |
+          if [ -d extracted/scripts ]; then
+            chmod +x extracted/scripts/*.sh || true
+            ls -la extracted/scripts || true
+          fi
+
+      # --- Setup explicit Flutter SDK version (avoid channel-detection issues) ---
+      - name: Setup Flutter SDK (explicit version)
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: stable
+          flutter-version: '3.22.3'    # <- explicit version used in your logs; change if needed
 
-      - name: Get flutter version
+      - name: Verify flutter
         run: flutter --version
 
-      # --- Create a fresh Flutter project (if needed) to avoid unsupported gradle errors ---
-      - name: Prepare Flutter app directory
-        run: |
-          APP_DIR=app
-          if [ -d "./extracted/android" ] || [ -f "./extracted/pubspec.yaml" ]; then
-            echo "Detected extracted flutter app files in extracted/"
-          else
-            echo "No Flutter app files detected in ZIP. Expecting Flutter files (pubspec.yaml, lib, assets) in ZIP."
-          fi
-
-          # If there is an 'app' folder inside extracted (already a flutter app), move into work
-          if [ -d extracted/app ] || [ -f extracted/pubspec.yaml ]; then
-            echo "Using extracted flutter project layout"
-          else
-            echo "No explicit flutter project root found inside ZIP. We'll create a minimal project then copy files."
-          fi
-
-      # --- Initialize or create a flutter project skeleton to avoid Gradle problems ---
-      - name: Create temporary flutter project (to fix gradle)
+      # --- Create a temporary Flutter skeleton project to ensure correct Gradle structure ---
+      - name: Create temporary flutter project (skeleton)
         run: |
           rm -rf temp_flutter_app || true
           flutter create --project-name ultroid_deployer temp_flutter_app
-          echo "Created temp flutter skeleton"
+          echo "Temp flutter skeleton created"
 
-      - name: Copy extracted files into temp project
+      - name: Copy extracted Flutter files into temp project
         run: |
-          # Copy only known flutter items (pubspec.yaml, lib, assets, android, ios, lib, pubspec.yaml inside extracted)
-          cp -r temp_flutter_app temp_backup || true
-          # Prefer if extracted contains a direct flutter project
+          # If ZIP had an 'app' folder use that, else copy top-level pubspec/lib/assets/android if present
           if [ -d extracted/app ]; then
-            echo "Using extracted/app content"
+            echo "Copying extracted/app -> temp_flutter_app"
             rsync -a --delete extracted/app/ temp_flutter_app/
           else
-            # copy top-level pubspec.yaml / lib / assets / android if present
+            echo "Copying detected files from extracted/ -> temp_flutter_app/"
             rsync -a --delete extracted/pubspec.yaml temp_flutter_app/ || true
             rsync -a --delete extracted/lib/ temp_flutter_app/lib/ || true
             rsync -a --delete extracted/assets/ temp_flutter_app/assets/ || true
             rsync -a --delete extracted/android/ temp_flutter_app/android/ || true
             rsync -a --delete extracted/ios/ temp_flutter_app/ios/ || true
-            rsync -a --delete extracted/app/ temp_flutter_app/ || true
           fi
 
-          echo "--- temp_flutter_app contents ---"
+          echo "Listing temp_flutter_app:"
           ls -la temp_flutter_app | sed -n '1,200p'
 
       - name: Get dependencies (flutter pub get)
@@ -129,30 +99,34 @@ jobs:
         working-directory: ./temp_flutter_app
         run: |
           set -e
-          echo "Building APK..."
+          echo "Building release APK..."
           flutter build apk --release --no-tree-shake-icons
 
-      - name: Collect APK artifact path
-        id: artifact
+      - name: Find APK artifact
+        id: findapk
         run: |
-          APK_PATH=$(find ./temp_flutter_app/build -type f -name "*-release.apk" -print -quit || true)
-          if [ -z "$APK_PATH" ]; then
-            echo "No release apk found at expected location. Searching all..."
-            APK_PATH=$(find . -type f -name "*.apk" -print -quit || true)
+          APK=$(find temp_flutter_app/build -type f -name "*-release.apk" -print -quit || true)
+          if [ -z "$APK" ]; then
+            APK=$(find . -type f -name "*.apk" -print -quit || true)
           fi
-          if [ -z "$APK_PATH" ]; then
+          if [ -z "$APK" ]; then
             echo "apk_path=" >> $GITHUB_OUTPUT
-            echo "##[error]APK not found, build may have failed."
-            exit 0
+            echo "No apk found"
           else
-            echo "apk_path=$APK_PATH" >> $GITHUB_OUTPUT
-            echo "Found apk: $APK_PATH"
+            echo "apk_path=$APK" >> $GITHUB_OUTPUT
+            echo "Found apk: $APK"
           fi
 
       - name: Upload APK artifact
-        if: always()
+        if: ${{ steps.findapk.outputs.apk_path != '' }}
         uses: actions/upload-artifact@v4
         with:
           name: build-output
-          path: ${{ steps.artifact.outputs.apk_path || 'temp_flutter_app/build/app/outputs/flutter-apk/app-release.apk' }}
+          path: ${{ steps.findapk.outputs.apk_path }}
           retention-days: 3
+
+      - name: Fail explanation (if APK missing)
+        if: ${{ steps.findapk.outputs.apk_path == '' }}
+        run: |
+          echo "APK not found. Check earlier logs for errors (pub get / build)."
+          exit 1
